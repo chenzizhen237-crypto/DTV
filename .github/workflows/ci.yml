@@ -1,0 +1,47 @@
+name: CI
+
+# Upstream only has release workflows (tags / manual). This runs on every push
+# and PR: the static frontend build Tauri embeds, then the backend's Rust tests.
+on:
+  push:
+    branches: [main, backend-fixes]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # prost-build (Douyin danmaku protobufs) needs protoc.
+      - name: Install protoc
+        run: brew install protobuf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
